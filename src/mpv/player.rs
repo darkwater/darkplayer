@@ -5,13 +5,15 @@ use std::sync::Arc;
 
 use eframe::glow::{self, HasContext, PixelUnpackData};
 use libmpv2::render::{OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType};
-use libmpv2::{mpv_log_level, Mpv};
+use libmpv2::Mpv;
+
+use crate::message::Message;
+use crate::mpv::event::MpvEvent;
 
 pub struct MpvPlayer {
     // IMPORTANT: render_ctx must be declared before mpv so it is dropped first.
     // RenderContext borrows from Mpv internally (we transmuted the lifetime to 'static).
     render_ctx: RenderContext<'static>,
-    #[allow(dead_code)]
     mpv: Mpv,
     fbo: glow::Framebuffer,
     texture: glow::Texture,
@@ -56,31 +58,11 @@ impl MpvPlayer {
             let ctx = ctx_ptr as *mut libmpv2_sys::mpv_handle;
             loop {
                 let event = unsafe { &*libmpv2_sys::mpv_wait_event(ctx, -1.0) };
-                match event.event_id {
-                    libmpv2_sys::mpv_event_id_MPV_EVENT_NONE => {}
-                    libmpv2_sys::mpv_event_id_MPV_EVENT_SHUTDOWN => break,
-                    libmpv2_sys::mpv_event_id_MPV_EVENT_LOG_MESSAGE => {
-                        let msg =
-                            unsafe { &*(event.data as *const libmpv2_sys::mpv_event_log_message) };
-                        let prefix = unsafe { CStr::from_ptr(msg.prefix) }
-                            .to_str()
-                            .unwrap_or("?");
-                        let text = unsafe { CStr::from_ptr(msg.text) }
-                            .to_str()
-                            .unwrap_or("?")
-                            .trim_end();
-                        let target = &format!("mpv/{prefix}");
-                        let level = match msg.log_level {
-                            mpv_log_level::Trace.. => log::Level::Trace,
-                            mpv_log_level::Debug.. => log::Level::Debug,
-                            mpv_log_level::Info.. => log::Level::Info,
-                            mpv_log_level::Warn.. => log::Level::Warn,
-                            _ => log::Level::Error,
-                        };
-
-                        log::log!(target: target, level, "{text}");
-                    }
-                    _ => {}
+                let event = MpvEvent::from(event);
+                let shutdown = matches!(event, MpvEvent::Shutdown);
+                Message::MpvEvent(event).send();
+                if shutdown {
+                    break;
                 }
             }
         });
@@ -130,6 +112,8 @@ impl MpvPlayer {
 
     pub fn resize_if_needed(&mut self, width: i32, height: i32) {
         if self.fbo_size != (width, height) && width > 0 && height > 0 {
+            log::debug!("Resizing FBO texture to {}x{}", width, height);
+
             unsafe { resize_fbo_texture(&self.gl, self.texture, width, height) };
             self.fbo_size = (width, height);
         }
@@ -162,6 +146,10 @@ impl MpvPlayer {
         unsafe {
             destroy_fbo(&self.gl, self.fbo, self.texture);
         }
+    }
+
+    pub fn command(&self, name: &str, args: &[&str]) -> libmpv2::Result<()> {
+        self.mpv.command(name, args)
     }
 }
 
