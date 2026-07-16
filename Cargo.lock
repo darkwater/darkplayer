@@ -404,6 +404,7 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "egui",
+ "egui_material_icons",
  "libmpv2",
  "libmpv2-sys",
  "log",
@@ -585,6 +586,15 @@ dependencies = [
  "memoffset",
  "profiling",
  "winit",
+]
+
+[[package]]
+name = "egui_material_icons"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd64a174529ad8ad5b3fcf74bafa368ed24aacc5887c2742b1e69ce4151c1a61"
+dependencies = [
+ "egui",
 ]
 
 [[package]]

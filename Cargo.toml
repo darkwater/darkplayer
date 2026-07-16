@@ -4,9 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-eframe            = { version = "0.35.0", default-features = false, features = ["glow", "x11", "wayland"] }
-egui              = "0.35.0"
-libmpv2           = "6.0.0"
-libmpv2-sys       = "4.0.1"
-log               = "0.4"
-pretty_env_logger = "0.5"
+eframe              = { version = "0.35.0", default-features = false, features = ["glow", "x11", "wayland"] }
+egui                = "0.35.0"
+egui_material_icons = { version = "0.7.0", default-features = false, features = ["outline"] }
+libmpv2             = "6.0.0"
+libmpv2-sys         = "4.0.1"
+log                 = "0.4"
+pretty_env_logger   = "0.5"

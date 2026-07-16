@@ -13,6 +13,12 @@ pub fn init(egui_ctx: egui::Context) -> mpsc::Receiver<Message> {
 #[derive(Debug, Clone)]
 pub enum Message {
     MpvEvent(crate::mpv::event::MpvEvent),
+
+    SeekBackward,
+    SeekForward,
+    Screenshot,
+    DpadMenu,
+    TogglePause,
 }
 
 impl Message {

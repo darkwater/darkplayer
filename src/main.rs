@@ -4,7 +4,11 @@ mod ui;
 
 use mpv::player::MpvPlayer;
 
-use crate::{mpv::event::MpvEvent, ui::dpad::Dpad};
+use crate::{
+    message::Message,
+    mpv::event::MpvEvent,
+    ui::pages::{empty::EmptyPage, Page},
+};
 
 fn main() {
     pretty_env_logger::init();
@@ -16,22 +20,29 @@ fn main() {
     eframe::run_native(
         "darkplayer",
         native_options,
-        Box::new(|cc| Ok(Box::new(DarkPlayer::new(cc)))),
+        Box::new(|cc| Ok(Box::new(Darkplayer::new(cc)))),
     )
     .expect("Failed to run eframe");
 }
 
-struct DarkPlayer {
+struct Darkplayer {
     inbox: message::Receiver,
     player: MpvPlayer,
     texture_id: Option<egui::TextureId>,
-    dpad: Dpad,
     shutting_down: bool,
+    page: Box<dyn Page>,
+
+    state: AppState,
 }
 
-impl DarkPlayer {
+#[derive(Default)]
+struct AppState {}
+
+impl Darkplayer {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let inbox = message::init(cc.egui_ctx.clone());
+
+        egui_material_icons::initialize(&cc.egui_ctx);
 
         let gl = cc.gl.clone().expect("glow context not available");
         let get_proc_address = cc
@@ -52,24 +63,43 @@ impl DarkPlayer {
             inbox,
             player,
             texture_id: None,
-            dpad: Dpad::default(),
             shutting_down: false,
+            page: Box::new(EmptyPage::default()),
+            state: AppState::default(),
         }
     }
 
-    fn handle_event(&mut self, ctx: &egui::Context, msg: message::Message) {
+    fn handle_event(&mut self, ctx: &egui::Context, msg: Message) {
         match msg {
-            message::Message::MpvEvent(MpvEvent::Shutdown) => {
+            Message::MpvEvent(MpvEvent::Shutdown) => {
                 log::info!("mpv shutdown event received, sending close to eframe");
                 self.shutting_down = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
-            message::Message::MpvEvent(MpvEvent::LogMessage { prefix, msg, level }) => {
+            Message::MpvEvent(MpvEvent::LogMessage { prefix, msg, level }) => {
                 log::log!(target: &prefix, level, "{msg}");
             }
-            message::Message::MpvEvent(event) => {
+            Message::MpvEvent(event) => {
                 // TODO:
                 log::warn!("mpv event: {:?}", event);
+            }
+            Message::SeekBackward => self
+                .player
+                .command("seek", &["-5", "relative"])
+                .expect("Failed to seek backward"),
+            Message::SeekForward => self
+                .player
+                .command("seek", &["5", "relative"])
+                .expect("Failed to seek forward"),
+            Message::Screenshot => self
+                .player
+                .command("screenshot", &[])
+                .expect("Failed to take screenshot"),
+            Message::DpadMenu => {}
+            Message::TogglePause => {
+                self.player
+                    .command("cycle", &["pause"])
+                    .expect("Failed to toggle pause");
             }
         }
     }
@@ -98,7 +128,7 @@ impl DarkPlayer {
     }
 }
 
-impl eframe::App for DarkPlayer {
+impl eframe::App for Darkplayer {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         while let Ok(msg) = self.inbox.try_recv() {
             self.handle_event(ctx, msg);
@@ -117,7 +147,7 @@ impl eframe::App for DarkPlayer {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.render_player(ui, frame);
-        self.dpad.render(ui);
+        self.page.render(&self.state, ui);
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
