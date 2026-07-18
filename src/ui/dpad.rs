@@ -1,7 +1,7 @@
 use core::time::Duration;
 use std::time::Instant;
 
-use egui::{vec2, Modifiers, Stroke};
+use egui::{emath::easing, vec2, Modifiers, Pos2, Stroke};
 use egui_material_icons::MaterialIcon;
 
 use crate::message::Message;
@@ -45,7 +45,8 @@ impl Dpad<'_> {
                     return;
                 } else {
                     ui.request_repaint();
-                    1.0 - (elapsed.as_secs_f32() / FADE_OUT_TIME.as_secs_f32())
+
+                    easing::cubic_out(1.0 - (elapsed.as_secs_f32() / FADE_OUT_TIME.as_secs_f32()))
                 }
             } else {
                 return;
@@ -60,43 +61,54 @@ impl Dpad<'_> {
             let radius = ui.content_rect().width().min(ui.content_rect().height()) * 0.1;
             let center = ui.content_rect().right_center() + vec2(radius * -1.5, 0.0);
 
-            let stroke = Stroke::new(radius * 0.04, egui::Color32::WHITE);
+            let fg_stroke = Stroke::new(radius * 0.04, egui::Color32::WHITE);
             let shadow_stroke =
                 Stroke::new(radius * 0.04 + 2., egui::Color32::from_black_alpha(127));
 
-            ui.painter()
-                .circle_stroke(center, radius - 1., shadow_stroke);
+            let draw_icon = |icon: MaterialIcon, position: Pos2| {
+                ui.painter().text(
+                    position + vec2(1.0, 1.0),
+                    egui::Align2::CENTER_CENTER,
+                    <&str>::from(icon),
+                    egui::FontId::new(radius * 0.5, icon.font_family()),
+                    egui::Color32::from_black_alpha(127),
+                );
 
-            ui.painter().circle_stroke(center, radius, stroke);
+                ui.painter().text(
+                    position,
+                    egui::Align2::CENTER_CENTER,
+                    <&str>::from(icon),
+                    egui::FontId::new(radius * 0.5, icon.font_family()),
+                    egui::Color32::WHITE,
+                );
+            };
+
+            let draw_circle = |position: Pos2, radius: f32| {
+                ui.painter()
+                    .circle_stroke(position, radius - 1., shadow_stroke);
+                ui.painter().circle_stroke(position, radius, fg_stroke);
+            };
+
+            draw_circle(center, radius);
 
             let ring_icon_distance = 0.7;
+
+            let back_button_radius = (ring_icon_distance - 1f32).abs();
+            let back_button_offset =
+                vec2(radius * -ring_icon_distance, radius * ring_icon_distance * 2.);
+
+            draw_circle(center + back_button_offset, radius * back_button_radius);
+
             for (action, offset) in [
                 (self.up.as_ref(), vec2(0.0, radius * -ring_icon_distance)),
                 (self.down.as_ref(), vec2(0.0, radius * ring_icon_distance)),
                 (self.left.as_ref(), vec2(radius * -ring_icon_distance, 0.0)),
                 (self.right.as_ref(), vec2(radius * ring_icon_distance, 0.0)),
                 (self.enter.as_ref(), vec2(0.0, 0.0)),
-                (
-                    self.back.as_ref(),
-                    vec2(radius * -ring_icon_distance, radius * ring_icon_distance * 2.),
-                ),
+                (self.back.as_ref(), back_button_offset + vec2(0., radius * -0.016)),
             ] {
                 if let Some(action) = action {
-                    ui.painter().text(
-                        center + offset + vec2(1.0, 1.0),
-                        egui::Align2::CENTER_CENTER,
-                        <&str>::from(action.icon),
-                        egui::FontId::new(radius * 0.5, action.icon.font_family()),
-                        egui::Color32::from_black_alpha(127),
-                    );
-
-                    ui.painter().text(
-                        center + offset,
-                        egui::Align2::CENTER_CENTER,
-                        <&str>::from(action.icon),
-                        egui::FontId::new(radius * 0.5, action.icon.font_family()),
-                        egui::Color32::WHITE,
-                    );
+                    draw_icon(action.icon, center + offset);
                 }
             }
         });

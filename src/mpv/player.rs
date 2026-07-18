@@ -151,6 +151,29 @@ impl MpvPlayer {
     pub fn command(&self, name: &str, args: &[&str]) -> libmpv2::Result<()> {
         self.mpv.command(name, args)
     }
+
+    pub fn command_async(&self, name: &str, args: &[&str]) -> libmpv2::Result<()> {
+        let userdata = 0;
+
+        // copied from self.mpv.command() but with added userdata argument
+
+        let mut cstr_args: Vec<CString> = Vec::with_capacity(args.len() + 1);
+        cstr_args.push(CString::new(name)?);
+
+        for arg in args {
+            cstr_args.push(CString::new(*arg)?);
+        }
+
+        let mut ptrs: Vec<_> = cstr_args.iter().map(|cstr| cstr.as_ptr()).collect();
+        ptrs.push(std::ptr::null());
+
+        match unsafe {
+            libmpv2_sys::mpv_command_async(self.mpv.ctx.as_ptr(), userdata, ptrs.as_mut_ptr())
+        } {
+            0 => Ok(()),
+            err_code => Err(libmpv2::Error::Raw(err_code)),
+        }
+    }
 }
 
 /// Creates an FBO with an RGBA8 texture attachment of the given dimensions.

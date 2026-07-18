@@ -1,3 +1,4 @@
+mod hermes;
 mod message;
 mod mpv;
 mod ui;
@@ -5,24 +6,29 @@ mod ui;
 use mpv::player::MpvPlayer;
 
 use crate::{
+    hermes::Hermes,
     message::Message,
     mpv::event::MpvEvent,
     ui::pages::{empty::EmptyPage, Page},
 };
 
-fn main() {
+#[tokio::main]
+async fn main() {
     pretty_env_logger::init();
 
     let native_options = eframe::NativeOptions {
         renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
-    eframe::run_native(
-        "darkplayer",
-        native_options,
-        Box::new(|cc| Ok(Box::new(Darkplayer::new(cc)))),
-    )
-    .expect("Failed to run eframe");
+
+    tokio::task::block_in_place(|| {
+        eframe::run_native(
+            "darkplayer",
+            native_options,
+            Box::new(|cc| Ok(Box::new(Darkplayer::new(cc)))),
+        )
+        .expect("Failed to run eframe");
+    })
 }
 
 struct Darkplayer {
@@ -31,6 +37,7 @@ struct Darkplayer {
     texture_id: Option<egui::TextureId>,
     shutting_down: bool,
     page: Box<dyn Page>,
+    hermes: anyhow::Result<Hermes>,
 
     state: AppState,
 }
@@ -65,6 +72,7 @@ impl Darkplayer {
             texture_id: None,
             shutting_down: false,
             page: Box::new(EmptyPage::default()),
+            hermes: Hermes::init(),
             state: AppState::default(),
         }
     }
@@ -78,6 +86,21 @@ impl Darkplayer {
             }
             Message::MpvEvent(MpvEvent::LogMessage { prefix, msg, level }) => {
                 log::log!(target: &prefix, level, "{msg}");
+            }
+            Message::MpvEvent(MpvEvent::CommandReplyScreenshot { width, height, stride, data }) => {
+                match &self.hermes {
+                    Ok(hermes) => {
+                        let hermes = hermes.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = hermes.send_image(data, width, height, stride).await {
+                                log::error!("Failed to send screenshot: {e:?}");
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        log::error!("Can't send screenshot, hermes not initialized: {e}");
+                    }
+                }
             }
             Message::MpvEvent(event) => {
                 // TODO:
@@ -93,7 +116,7 @@ impl Darkplayer {
                 .expect("Failed to seek forward"),
             Message::Screenshot => self
                 .player
-                .command("screenshot", &[])
+                .command_async("screenshot-raw", &["subtitles", "rgba"])
                 .expect("Failed to take screenshot"),
             Message::DpadMenu => {}
             Message::TogglePause => {
