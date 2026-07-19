@@ -8,8 +8,11 @@ use mpv::player::MpvPlayer;
 use crate::{
     hermes::Hermes,
     message::Message,
-    mpv::event::MpvEvent,
-    ui::pages::{empty::EmptyPage, Page},
+    mpv::event::{MpvEvent, Properties},
+    ui::{
+        pages::{Page, empty::EmptyPage},
+        widgets::FadeTimer,
+    },
 };
 
 #[tokio::main]
@@ -43,7 +46,10 @@ struct Darkplayer {
 }
 
 #[derive(Default)]
-struct AppState {}
+struct AppState {
+    last_seek: FadeTimer,
+    properties: Properties,
+}
 
 impl Darkplayer {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -59,6 +65,17 @@ impl Darkplayer {
 
         let initial_size = (1280, 720);
         let player = MpvPlayer::new(gl, get_proc_address, &cc.egui_ctx, initial_size);
+
+        player
+            .batch_observe_properties(&[
+                ("time-pos", libmpv2::Format::Double),
+                ("duration", libmpv2::Format::Double),
+                // ("playlist", libmpv2::Format::Node),
+                // ("track-list", libmpv2::Format::Node),
+                // ("chapter-list", libmpv2::Format::Node),
+                // ("metadata", libmpv2::Format::Node),
+            ])
+            .unwrap();
 
         if let Some(path) = std::env::args().nth(1) {
             player.load_file(&path);
@@ -87,6 +104,9 @@ impl Darkplayer {
             Message::MpvEvent(MpvEvent::LogMessage { prefix, msg, level }) => {
                 log::log!(target: &prefix, level, "{msg}");
             }
+            Message::MpvEvent(MpvEvent::PropertyChange(change)) => {
+                self.state.properties.apply(change);
+            }
             Message::MpvEvent(MpvEvent::CommandReplyScreenshot { width, height, stride, data }) => {
                 match &self.hermes {
                     Ok(hermes) => {
@@ -106,14 +126,18 @@ impl Darkplayer {
                 // TODO:
                 log::warn!("mpv event: {:?}", event);
             }
-            Message::SeekBackward => self
-                .player
-                .command("seek", &["-5", "relative"])
-                .expect("Failed to seek backward"),
-            Message::SeekForward => self
-                .player
-                .command("seek", &["5", "relative"])
-                .expect("Failed to seek forward"),
+            Message::SeekBackward => {
+                self.state.last_seek.reset();
+                self.player
+                    .command("seek", &["-5", "relative"])
+                    .expect("Failed to seek backward")
+            }
+            Message::SeekForward => {
+                self.state.last_seek.reset();
+                self.player
+                    .command("seek", &["5", "relative"])
+                    .expect("Failed to seek forward")
+            }
             Message::Screenshot => self
                 .player
                 .command_async("screenshot-raw", &["subtitles", "rgba"])

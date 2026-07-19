@@ -1,11 +1,11 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use eframe::glow::{self, HasContext, PixelUnpackData};
-use libmpv2::render::{OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType};
 use libmpv2::Mpv;
+use libmpv2::render::{OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType};
 
 use crate::message::Message;
 use crate::mpv::event::MpvEvent;
@@ -148,6 +148,25 @@ impl MpvPlayer {
         }
     }
 
+    pub fn batch_observe_properties(
+        &self,
+        properties: &[(&str, libmpv2::Format)],
+    ) -> libmpv2::Result<()> {
+        for (name, format) in properties {
+            self.observe_property(name, *format, 0)?;
+        }
+        Ok(())
+    }
+
+    pub fn observe_property(
+        &self,
+        name: &str,
+        format: libmpv2::Format,
+        id: u64,
+    ) -> libmpv2::Result<()> {
+        self.mpv.observe_property(name, format, id)
+    }
+
     pub fn command(&self, name: &str, args: &[&str]) -> libmpv2::Result<()> {
         self.mpv.command(name, args)
     }
@@ -182,35 +201,37 @@ pub unsafe fn create_fbo(
     width: i32,
     height: i32,
 ) -> (glow::Framebuffer, glow::Texture) {
-    let texture = gl.create_texture().unwrap();
-    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-    gl.tex_image_2d(
-        glow::TEXTURE_2D,
-        0,
-        glow::RGBA8 as i32,
-        width,
-        height,
-        0,
-        glow::RGBA,
-        glow::UNSIGNED_BYTE,
-        PixelUnpackData::Slice(None),
-    );
-    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
-    gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
-    gl.bind_texture(glow::TEXTURE_2D, None);
+    unsafe {
+        let texture = gl.create_texture().unwrap();
+        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+        gl.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::RGBA8 as i32,
+            width,
+            height,
+            0,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            PixelUnpackData::Slice(None),
+        );
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+        gl.bind_texture(glow::TEXTURE_2D, None);
 
-    let fbo = gl.create_framebuffer().unwrap();
-    gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
-    gl.framebuffer_texture_2d(
-        glow::FRAMEBUFFER,
-        glow::COLOR_ATTACHMENT0,
-        glow::TEXTURE_2D,
-        Some(texture),
-        0,
-    );
-    gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+        let fbo = gl.create_framebuffer().unwrap();
+        gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
+        gl.framebuffer_texture_2d(
+            glow::FRAMEBUFFER,
+            glow::COLOR_ATTACHMENT0,
+            glow::TEXTURE_2D,
+            Some(texture),
+            0,
+        );
+        gl.bind_framebuffer(glow::FRAMEBUFFER, None);
 
-    (fbo, texture)
+        (fbo, texture)
+    }
 }
 
 /// Resize the FBO texture in-place (same handle, new dimensions).
@@ -220,23 +241,27 @@ pub unsafe fn resize_fbo_texture(
     width: i32,
     height: i32,
 ) {
-    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-    gl.tex_image_2d(
-        glow::TEXTURE_2D,
-        0,
-        glow::RGBA8 as i32,
-        width,
-        height,
-        0,
-        glow::RGBA,
-        glow::UNSIGNED_BYTE,
-        PixelUnpackData::Slice(None),
-    );
-    gl.bind_texture(glow::TEXTURE_2D, None);
+    unsafe {
+        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+        gl.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::RGBA8 as i32,
+            width,
+            height,
+            0,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            PixelUnpackData::Slice(None),
+        );
+        gl.bind_texture(glow::TEXTURE_2D, None);
+    }
 }
 
 /// Deletes FBO and texture.
 pub unsafe fn destroy_fbo(gl: &glow::Context, fbo: glow::Framebuffer, texture: glow::Texture) {
-    gl.delete_framebuffer(fbo);
-    gl.delete_texture(texture);
+    unsafe {
+        gl.delete_framebuffer(fbo);
+        gl.delete_texture(texture);
+    }
 }

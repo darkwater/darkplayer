@@ -1,3 +1,2 @@
 pub mod pages;
-
-pub mod dpad;
+pub mod widgets;

@@ -1,9 +1,16 @@
+mod node;
+mod property;
+
+pub use property::Properties;
+
 use core::ffi::CStr;
 
-use libmpv2::mpv_log_level;
-use libmpv2_sys::{mpv_event, mpv_event_name, mpv_node, mpv_node_list};
+use libmpv2::{mpv_format, mpv_log_level};
+use libmpv2_sys::{mpv_event, mpv_event_name};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+use self::{node::NodeMap, property::PropertyChange};
+
+#[derive(Debug, Clone)]
 pub enum MpvEvent {
     /// Nothing happened. Happens on timeouts or sporadic wakeups.
     None,
@@ -18,6 +25,8 @@ pub enum MpvEvent {
         msg: String,
         level: log::Level,
     },
+
+    PropertyChange(PropertyChange),
 
     CommandReplyScreenshot {
         width: u32,
@@ -56,6 +65,34 @@ impl From<&mpv_event> for MpvEvent {
                         _ => log::Level::Error,
                     },
                 }
+            }
+            libmpv2_sys::mpv_event_id_MPV_EVENT_PROPERTY_CHANGE => {
+                let prop = unsafe { &*(event.data as *const libmpv2_sys::mpv_event_property) };
+
+                let name = unsafe { CStr::from_ptr(prop.name) };
+
+                let double = prop.data as *const f64;
+
+                let change = match (name.to_bytes(), prop.format) {
+                    (b"time-pos", mpv_format::Double) => {
+                        PropertyChange::TimePos(Some(unsafe { *double }))
+                    }
+                    (b"duration", mpv_format::Double) => {
+                        PropertyChange::Duration(Some(unsafe { *double }))
+                    }
+                    (b"time-pos", mpv_format::None) => PropertyChange::TimePos(None),
+                    (b"duration", mpv_format::None) => PropertyChange::Duration(None),
+                    _ => {
+                        log::warn!(
+                            "Unhandled property change: name={:?}, format={:?}",
+                            name,
+                            prop.format
+                        );
+                        return MpvEvent::None;
+                    }
+                };
+
+                Self::PropertyChange(change)
             }
             libmpv2_sys::mpv_event_id_MPV_EVENT_COMMAND_REPLY => {
                 let cmd = unsafe { &*(event.data as *const libmpv2_sys::mpv_event_command) };
@@ -108,63 +145,4 @@ fn parse_screenshot_reply(map: &NodeMap) -> Option<MpvEvent> {
         stride,
         data: data.to_vec(),
     })
-}
-
-struct NodeMap<'a>(&'a mpv_node_list);
-impl NodeMap<'_> {
-    fn new(node: &mpv_node) -> Option<Self> {
-        if node.format == libmpv2_sys::mpv_format_MPV_FORMAT_NODE_MAP {
-            Some(Self(unsafe { &*node.u.list }))
-        } else {
-            None
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.0.num as usize
-    }
-
-    fn keys(&self) -> impl Iterator<Item = &CStr> {
-        let keys = unsafe { std::slice::from_raw_parts(self.0.keys, self.len()) };
-        keys.iter().map(|&k| unsafe { CStr::from_ptr(k) })
-    }
-
-    fn get_raw(&self, key: &CStr) -> Option<&mpv_node> {
-        let keys = unsafe { std::slice::from_raw_parts(self.0.keys, self.len()) };
-        let values = unsafe { std::slice::from_raw_parts(self.0.values, self.len()) };
-
-        for (k, v) in keys.iter().zip(values.iter()) {
-            if unsafe { CStr::from_ptr(*k) } == key {
-                return Some(v);
-            }
-        }
-
-        None
-    }
-
-    fn get<T>(&self, key: &CStr) -> Option<T>
-    where
-        T: FromMpvNode,
-    {
-        let node = self.get_raw(key)?;
-        assert_eq!(node.format, T::FORMAT);
-        Some(T::from_mpv_node(node))
-    }
-}
-trait FromMpvNode: Sized {
-    const FORMAT: libmpv2_sys::mpv_format;
-    fn from_mpv_node(node: &mpv_node) -> Self;
-}
-impl FromMpvNode for i64 {
-    const FORMAT: libmpv2_sys::mpv_format = libmpv2_sys::mpv_format_MPV_FORMAT_INT64;
-    fn from_mpv_node(node: &mpv_node) -> Self {
-        unsafe { node.u.int64 }
-    }
-}
-impl FromMpvNode for &[u8] {
-    const FORMAT: libmpv2_sys::mpv_format = libmpv2_sys::mpv_format_MPV_FORMAT_BYTE_ARRAY;
-    fn from_mpv_node(node: &mpv_node) -> Self {
-        let ba = unsafe { &*node.u.ba };
-        unsafe { std::slice::from_raw_parts(ba.data as *const u8, ba.size) }
-    }
 }
