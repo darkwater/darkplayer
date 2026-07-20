@@ -10,8 +10,8 @@ use crate::{
     message::Message,
     mpv::event::{MpvEvent, Properties},
     ui::{
-        pages::{Page, empty::EmptyPage},
-        widgets::FadeTimer,
+        pages::{Page, player::PlayerPage},
+        widgets::{FadeTimer, frame_history::FrameHistory},
     },
 };
 
@@ -41,6 +41,7 @@ struct Darkplayer {
     shutting_down: bool,
     page: Box<dyn Page>,
     hermes: anyhow::Result<Hermes>,
+    frame_history: FrameHistory,
 
     state: AppState,
 }
@@ -54,6 +55,8 @@ struct AppState {
 impl Darkplayer {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let inbox = message::init(cc.egui_ctx.clone());
+
+        cc.egui_ctx.all_styles_mut(|s| *s = ui::style::style());
 
         egui_material_icons::initialize(&cc.egui_ctx);
 
@@ -77,6 +80,15 @@ impl Darkplayer {
             ])
             .unwrap();
 
+        if let Err(libmpv2::Error::Raw(d)) = player.mpv().set_property("display-fps-override", 165)
+        {
+            eprintln!("Failed to set display-fps: {}", libmpv2_sys::mpv_error_str(d));
+        }
+        // player
+        //     .command("set", &["video-sync", "display-resample"])
+        //     .unwrap();
+        // player.command("set", &["interpolation", "yes"]).unwrap();
+
         if let Some(path) = std::env::args().nth(1) {
             player.load_file(&path);
         } else {
@@ -88,8 +100,9 @@ impl Darkplayer {
             player,
             texture_id: None,
             shutting_down: false,
-            page: Box::new(EmptyPage::default()),
+            page: Box::new(PlayerPage::default()),
             hermes: Hermes::init(),
+            frame_history: FrameHistory::default(),
             state: AppState::default(),
         }
     }
@@ -125,6 +138,14 @@ impl Darkplayer {
             Message::MpvEvent(event) => {
                 // TODO:
                 log::warn!("mpv event: {:?}", event);
+            }
+            Message::MpvCommand(cmd, args) => {
+                if let Err(libmpv2::Error::Raw(d)) = self
+                    .player
+                    .command(&cmd, &args.iter().map(|s| s.as_str()).collect::<Vec<_>>())
+                {
+                    log::error!("Failed to send command to mpv: {}", libmpv2_sys::mpv_error_str(d));
+                }
             }
             Message::SeekBackward => {
                 self.state.last_seek.reset();
@@ -193,8 +214,29 @@ impl eframe::App for Darkplayer {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        self.frame_history
+            .on_new_frame(ui.input(|i| i.time), frame.info().cpu_usage);
+
+        // scale the ui such that we can pretend the window is always 1920x1080
+        ui.set_zoom_factor(ui.content_rect().width() * ui.zoom_factor() / 1920.0);
+
         self.render_player(ui, frame);
         self.page.render(&self.state, ui);
+
+        egui::Window::new("Debug").show(ui, |ui| {
+            for prop in ["tscale", "interpolation", "video-sync", "display-resample"] {
+                let value = self
+                    .player
+                    .mpv()
+                    .get_property::<String>(prop)
+                    .unwrap_or_else(|_| "unknown".to_string());
+
+                ui.label(format!("{prop}: {value}"));
+            }
+
+            ui.label(format!("FPS: {:.3}", self.frame_history.fps()));
+            self.frame_history.ui(ui)
+        });
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

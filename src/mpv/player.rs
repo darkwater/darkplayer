@@ -1,14 +1,19 @@
-use std::ffi::{CStr, CString};
-use std::os::raw::c_void;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+    ffi::{CStr, CString},
+    os::raw::c_void,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use eframe::glow::{self, HasContext, PixelUnpackData};
-use libmpv2::Mpv;
-use libmpv2::render::{OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType};
+use libmpv2::{
+    Mpv,
+    render::{OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType},
+};
 
-use crate::message::Message;
-use crate::mpv::event::MpvEvent;
+use crate::{message::Message, mpv::event::MpvEvent};
 
 pub struct MpvPlayer {
     // IMPORTANT: render_ctx must be declared before mpv so it is dropped first.
@@ -33,8 +38,6 @@ fn mpv_get_proc_address(ctx: &GlProcAddressCtx, name: &str) -> *mut c_void {
     (ctx.get_proc_address)(&cstr) as *mut c_void
 }
 
-unsafe impl Send for MpvPlayer {}
-
 impl MpvPlayer {
     pub fn new(
         gl: Arc<glow::Context>,
@@ -48,8 +51,7 @@ impl MpvPlayer {
 
         // Enable mpv log messages forwarded to the log crate
         unsafe {
-            let level = CString::new("v").unwrap(); // "v" = verbose
-            libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), level.as_ptr());
+            libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), c"v".as_ptr());
         }
 
         // Spawn event loop thread to forward mpv log messages
@@ -82,6 +84,7 @@ impl MpvPlayer {
             .expect("Failed to create RenderContext");
 
         // Transmute to 'static lifetime - sound because MpvPlayer owns both mpv and render_ctx
+        // (sound according to opus)
         let mut render_ctx: RenderContext<'static> = unsafe { std::mem::transmute(render_ctx) };
 
         let new_frame = Arc::new(AtomicBool::new(false));
@@ -125,9 +128,7 @@ impl MpvPlayer {
         }
 
         let (w, h) = self.fbo_size;
-        let fbo_raw = unsafe {
-            std::mem::transmute::<glow::Framebuffer, std::num::NonZeroU32>(self.fbo).get() as i32
-        };
+        let fbo_raw = self.fbo.0.get() as i32;
 
         self.render_ctx
             .render::<GlProcAddressCtx>(fbo_raw, w, h, true)
@@ -146,6 +147,12 @@ impl MpvPlayer {
         unsafe {
             destroy_fbo(&self.gl, self.fbo, self.texture);
         }
+    }
+
+    #[deprecated(note = "only use this to fuck around")]
+    #[expect(dead_code)]
+    pub fn mpv(&self) -> &Mpv {
+        &self.mpv
     }
 
     pub fn batch_observe_properties(

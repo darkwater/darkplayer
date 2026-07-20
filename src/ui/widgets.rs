@@ -1,14 +1,15 @@
+pub mod dpad;
+pub mod frame_history;
+pub mod seek_bar;
+
 use core::time::Duration;
 use std::time::Instant;
 
 use egui::emath::easing;
 
-pub mod dpad;
-pub mod seek_bar;
-
 pub trait Fadeable {
-    fn ui(&mut self, ui: &mut egui::Ui);
-    fn logic(self, ui: &mut egui::Ui, timer: Option<&mut FadeTimer>);
+    fn ui(self, ui: &mut egui::Ui);
+    fn logic(&mut self, ui: &mut egui::Ui, timer: Option<&mut FadeTimer>);
 }
 
 pub struct Faded<'a, T: Fadeable> {
@@ -45,9 +46,11 @@ impl<'a, T: Fadeable> Faded<'a, T> {
     }
 
     pub fn render(self, ui: &mut egui::Ui) {
-        let Self { mut inner, fade_timer, period } = self;
+        let Self { mut inner, mut fade_timer, period } = self;
 
-        if let Some(timer) = &fade_timer {
+        inner.logic(ui, fade_timer.as_deref_mut());
+
+        if let Some(timer) = fade_timer {
             if let Some(last_input) = timer.last_input {
                 let elapsed = last_input.elapsed();
                 if elapsed >= period {
@@ -70,8 +73,6 @@ impl<'a, T: Fadeable> Faded<'a, T> {
         } else {
             // shown
             inner.ui(ui);
-        };
-
-        inner.logic(ui, fade_timer);
+        }
     }
 }

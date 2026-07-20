@@ -1,4 +1,4 @@
-use std::sync::{mpsc, OnceLock};
+use std::sync::{OnceLock, mpsc};
 
 pub type Receiver = mpsc::Receiver<Message>;
 
@@ -13,6 +13,7 @@ pub fn init(egui_ctx: egui::Context) -> mpsc::Receiver<Message> {
 #[derive(Debug, Clone)]
 pub enum Message {
     MpvEvent(crate::mpv::event::MpvEvent),
+    MpvCommand(String, Vec<String>),
 
     SeekBackward,
     SeekForward,

@@ -1,12 +1,11 @@
 mod node;
 mod property;
 
-pub use property::Properties;
-
 use core::ffi::CStr;
 
 use libmpv2::{mpv_format, mpv_log_level};
 use libmpv2_sys::{mpv_event, mpv_event_name};
+pub use property::Properties;
 
 use self::{node::NodeMap, property::PropertyChange};
 
