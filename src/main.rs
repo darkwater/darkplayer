@@ -2,6 +2,9 @@ mod hermes;
 mod message;
 mod mpv;
 mod ui;
+mod utils;
+
+use std::time::Instant;
 
 use mpv::player::MpvPlayer;
 
@@ -17,7 +20,7 @@ use crate::{
 
 #[tokio::main]
 async fn main() {
-    pretty_env_logger::init();
+    pretty_env_logger::init_timed();
 
     let native_options = eframe::NativeOptions {
         renderer: eframe::Renderer::Glow,
@@ -42,6 +45,7 @@ struct Darkplayer {
     page: Box<dyn Page>,
     hermes: anyhow::Result<Hermes>,
     frame_history: FrameHistory,
+    last_event: Instant,
 
     state: AppState,
 }
@@ -80,14 +84,15 @@ impl Darkplayer {
             ])
             .unwrap();
 
-        if let Err(libmpv2::Error::Raw(d)) = player.mpv().set_property("display-fps-override", 165)
-        {
-            eprintln!("Failed to set display-fps: {}", libmpv2_sys::mpv_error_str(d));
-        }
+        // if let Err(libmpv2::Error::Raw(d)) = player.mpv().set_property("display-fps-override", 165)
+        // {
+        //     eprintln!("Failed to set display-fps: {}", libmpv2_sys::mpv_error_str(d));
+        // }
         // player
         //     .command("set", &["video-sync", "display-resample"])
         //     .unwrap();
         // player.command("set", &["interpolation", "yes"]).unwrap();
+        player.command("set", &["hwdec", "yes"]).unwrap();
 
         if let Some(path) = std::env::args().nth(1) {
             player.load_file(&path);
@@ -103,6 +108,7 @@ impl Darkplayer {
             page: Box::new(PlayerPage::default()),
             hermes: Hermes::init(),
             frame_history: FrameHistory::default(),
+            last_event: Instant::now(),
             state: AppState::default(),
         }
     }
@@ -137,7 +143,9 @@ impl Darkplayer {
             }
             Message::MpvEvent(event) => {
                 // TODO:
+                log::warn!("since last event: {:?}", self.last_event.elapsed());
                 log::warn!("mpv event: {:?}", event);
+                self.last_event = Instant::now();
             }
             Message::MpvCommand(cmd, args) => {
                 if let Err(libmpv2::Error::Raw(d)) = self
@@ -150,13 +158,13 @@ impl Darkplayer {
             Message::SeekBackward => {
                 self.state.last_seek.reset();
                 self.player
-                    .command("seek", &["-5", "relative"])
+                    .command("seek", &["-5", "relative+keyframes"])
                     .expect("Failed to seek backward")
             }
             Message::SeekForward => {
                 self.state.last_seek.reset();
                 self.player
-                    .command("seek", &["5", "relative"])
+                    .command("seek", &["5", "relative+keyframes"])
                     .expect("Failed to seek forward")
             }
             Message::Screenshot => self
@@ -224,7 +232,9 @@ impl eframe::App for Darkplayer {
         self.page.render(&self.state, ui);
 
         egui::Window::new("Debug").show(ui, |ui| {
-            for prop in ["tscale", "interpolation", "video-sync", "display-resample"] {
+            for prop in
+                ["tscale", "interpolation", "video-sync", "display-resample", "hwdec-current"]
+            {
                 let value = self
                     .player
                     .mpv()

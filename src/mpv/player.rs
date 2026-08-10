@@ -5,6 +5,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
+    time::Instant,
 };
 
 use eframe::glow::{self, HasContext, PixelUnpackData};
@@ -45,9 +46,13 @@ impl MpvPlayer {
         egui_ctx: &egui::Context,
         initial_size: (i32, i32),
     ) -> Self {
-        let mpv = Mpv::new().expect("Failed to create Mpv instance");
-        mpv.set_property("vo", "libmpv")
-            .expect("Failed to set vo=libmpv");
+        let mpv = Mpv::with_initializer(|mpv| {
+            mpv.set_property("input-default-bindings", "yes")?;
+            mpv.set_property("input-builtin-bindings", "yes")?;
+            mpv.set_property("vo", "libmpv")?;
+            Ok(())
+        })
+        .expect("Failed to create Mpv instance");
 
         // Enable mpv log messages forwarded to the log crate
         unsafe {
@@ -175,7 +180,10 @@ impl MpvPlayer {
     }
 
     pub fn command(&self, name: &str, args: &[&str]) -> libmpv2::Result<()> {
-        self.mpv.command(name, args)
+        let start = Instant::now();
+        self.mpv.command(name, args)?;
+        log::warn!("command took {:?}", start.elapsed());
+        Ok(())
     }
 
     pub fn command_async(&self, name: &str, args: &[&str]) -> libmpv2::Result<()> {

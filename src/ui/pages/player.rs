@@ -1,6 +1,6 @@
 use core::time::Duration;
 
-use egui::{Key, Modifiers, emath::easing};
+use egui::{Frame, Key, Modifiers, Panel, emath::easing};
 use egui_material_icons::icons;
 
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
         utils::AnimTimer,
         widgets::seek_bar::{SeekBar, SeekBarPosition, SeekBarState},
     },
+    utils::ResponseExt,
 };
 
 #[derive(Default)]
@@ -202,6 +203,7 @@ impl Page for PlayerPage {
                 (Key::ArrowLeft, Command::SendMessageShowBar(|| Message::SeekBackward)),
                 (Key::ArrowRight, Command::SendMessageShowBar(|| Message::SeekForward)),
                 (Key::ArrowDown, Command::Transition(focus, SeekBarState::Menu)),
+                (Key::Enter, Command::SendMessage(|| Message::TogglePause)),
                 (Key::Escape, Command::Transition(focus, SeekBarState::Offscreen)),
             ],
             SeekBarState::Menu => &[
@@ -239,9 +241,30 @@ impl Page for PlayerPage {
                 ui.spacing_mut().button_padding = egui::vec2(20., 10.);
                 ui.spacing_mut().item_spacing = egui::vec2(30., 0.);
 
-                ui.button("foo");
+                ui.button("foo").autofocus();
                 ui.button("bar");
                 ui.button(icons::ICON_CAMERA_ALT.rich_text().size(32.));
+                ui.button("Settings");
+                ui.button("Settings");
+                ui.button("Settings");
+
+                Panel::right("seek bar right menu")
+                    .resizable(false)
+                    .frame(Frame::NONE)
+                    .show_separator_line(false)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().button_padding = egui::vec2(20., 10.);
+                            ui.spacing_mut().item_spacing = egui::vec2(30., 0.);
+
+                            ui.button("Settings");
+                            ui.button("Settings");
+                            ui.button("Settings");
+                            ui.button("Settings");
+                            ui.button("Settings");
+                            ui.button("Settings");
+                        });
+                    });
             },
         }
         .ui(ui, self.opacity(), self.position());
