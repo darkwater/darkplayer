@@ -92,7 +92,6 @@ impl Darkplayer {
         //     .command("set", &["video-sync", "display-resample"])
         //     .unwrap();
         // player.command("set", &["interpolation", "yes"]).unwrap();
-        player.command("set", &["hwdec", "yes"]).unwrap();
 
         if let Some(path) = std::env::args().nth(1) {
             player.load_file(&path);
@@ -169,7 +168,7 @@ impl Darkplayer {
             }
             Message::Screenshot => self
                 .player
-                .command_async("screenshot-raw", &["subtitles", "rgba"])
+                .command("screenshot-raw", &["subtitles", "rgba"])
                 .expect("Failed to take screenshot"),
             Message::DpadMenu => {}
             Message::TogglePause => {
@@ -230,23 +229,6 @@ impl eframe::App for Darkplayer {
 
         self.render_player(ui, frame);
         self.page.render(&self.state, ui);
-
-        egui::Window::new("Debug").show(ui, |ui| {
-            for prop in
-                ["tscale", "interpolation", "video-sync", "display-resample", "hwdec-current"]
-            {
-                let value = self
-                    .player
-                    .mpv()
-                    .get_property::<String>(prop)
-                    .unwrap_or_else(|_| "unknown".to_string());
-
-                ui.label(format!("{prop}: {value}"));
-            }
-
-            ui.label(format!("FPS: {:.3}", self.frame_history.fps()));
-            self.frame_history.ui(ui)
-        });
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

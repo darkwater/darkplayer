@@ -47,9 +47,8 @@ impl MpvPlayer {
         initial_size: (i32, i32),
     ) -> Self {
         let mpv = Mpv::with_initializer(|mpv| {
-            mpv.set_property("input-default-bindings", "yes")?;
-            mpv.set_property("input-builtin-bindings", "yes")?;
             mpv.set_property("vo", "libmpv")?;
+            mpv.set_property("hwdec", "yes")?;
             Ok(())
         })
         .expect("Failed to create Mpv instance");
@@ -179,14 +178,14 @@ impl MpvPlayer {
         self.mpv.observe_property(name, format, id)
     }
 
-    pub fn command(&self, name: &str, args: &[&str]) -> libmpv2::Result<()> {
+    pub fn command_sync(&self, name: &str, args: &[&str]) -> libmpv2::Result<()> {
         let start = Instant::now();
         self.mpv.command(name, args)?;
         log::warn!("command took {:?}", start.elapsed());
         Ok(())
     }
 
-    pub fn command_async(&self, name: &str, args: &[&str]) -> libmpv2::Result<()> {
+    pub fn command(&self, name: &str, args: &[&str]) -> libmpv2::Result<()> {
         let userdata = 0;
 
         // copied from self.mpv.command() but with added userdata argument

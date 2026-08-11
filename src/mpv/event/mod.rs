@@ -96,7 +96,9 @@ impl From<&mpv_event> for MpvEvent {
             libmpv2_sys::mpv_event_id_MPV_EVENT_COMMAND_REPLY => {
                 let cmd = unsafe { &*(event.data as *const libmpv2_sys::mpv_event_command) };
 
-                if cmd.result.format == libmpv2_sys::mpv_format_MPV_FORMAT_NODE_MAP {
+                if cmd.result.format == libmpv2_sys::mpv_format_MPV_FORMAT_NONE {
+                    Self::None
+                } else if cmd.result.format == libmpv2_sys::mpv_format_MPV_FORMAT_NODE_MAP {
                     let map = NodeMap::new(&cmd.result).expect("Expected a node map");
                     log::debug!("Command reply map keys: {:?}", map.keys().collect::<Vec<_>>());
 
