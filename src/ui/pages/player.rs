@@ -1,13 +1,12 @@
 use core::time::Duration;
 
-use egui::{Frame, Key, Modifiers, Panel, emath::easing};
-use egui_material_icons::icons;
+use egui::{Key, Modifiers, emath::easing};
 
+use super::{Page, library::LibraryPage};
 use crate::{
     AppState,
     message::Message,
     ui::{
-        pages::Page,
         utils::AnimTimer,
         widgets::seek_bar::{SeekBar, SeekBarPosition, SeekBarState},
     },
@@ -100,99 +99,13 @@ enum Command {
 
 impl Page for PlayerPage {
     fn render(&mut self, app: &AppState, ui: &mut egui::Ui) {
+        for (path, hash) in &app.db.index {
+            ui.label(format!("{}: {}", path.display(), hash.0));
+        }
+
         let focus = self.focus();
         let cmds = match focus {
             SeekBarState::Offscreen => &[
-                (
-                    Key::Q,
-                    Command::SendMessage(|| {
-                        Message::MpvCommand("cycle-values".to_owned(), vec![
-                            "tscale".to_owned(),
-                            "jinc".to_owned(),
-                            "sphinx".to_owned(),
-                            "blackman".to_owned(),
-                            "kaiser".to_owned(),
-                            "welch".to_owned(),
-                            "quadric".to_owned(),
-                            "hamming".to_owned(),
-                            "tukey".to_owned(),
-                            "hanning".to_owned(),
-                            "cosine".to_owned(),
-                            "bartlett".to_owned(),
-                            "gaussian".to_owned(),
-                            "triangle".to_owned(),
-                            "nearest".to_owned(),
-                            "box".to_owned(),
-                            "robidouxsharp".to_owned(),
-                            "robidoux".to_owned(),
-                            "mitchell".to_owned(),
-                            "catmull_rom".to_owned(),
-                            "hermite".to_owned(),
-                            "bicubic".to_owned(),
-                            "ginseng".to_owned(),
-                            "lanczos".to_owned(),
-                            "sinc".to_owned(),
-                            "spline64".to_owned(),
-                            "spline36".to_owned(),
-                            "spline16".to_owned(),
-                            "linear".to_owned(),
-                            "oversample".to_owned(),
-                        ])
-                    }),
-                ),
-                (
-                    Key::W,
-                    Command::SendMessage(|| {
-                        Message::MpvCommand("cycle-values".to_owned(), vec![
-                            "tscale".to_owned(),
-                            "oversample".to_owned(),
-                            "linear".to_owned(),
-                            "spline16".to_owned(),
-                            "spline36".to_owned(),
-                            "spline64".to_owned(),
-                            "sinc".to_owned(),
-                            "lanczos".to_owned(),
-                            "ginseng".to_owned(),
-                            "bicubic".to_owned(),
-                            "hermite".to_owned(),
-                            "catmull_rom".to_owned(),
-                            "mitchell".to_owned(),
-                            "robidoux".to_owned(),
-                            "robidouxsharp".to_owned(),
-                            "box".to_owned(),
-                            "nearest".to_owned(),
-                            "triangle".to_owned(),
-                            "gaussian".to_owned(),
-                            "bartlett".to_owned(),
-                            "cosine".to_owned(),
-                            "hanning".to_owned(),
-                            "tukey".to_owned(),
-                            "hamming".to_owned(),
-                            "quadric".to_owned(),
-                            "welch".to_owned(),
-                            "kaiser".to_owned(),
-                            "blackman".to_owned(),
-                            "sphinx".to_owned(),
-                            "jinc".to_owned(),
-                        ])
-                    }),
-                ),
-                (
-                    Key::E,
-                    Command::SendMessage(|| {
-                        Message::MpvCommand("cycle".to_owned(), vec!["interpolation".to_owned()])
-                    }),
-                ),
-                (
-                    Key::R,
-                    Command::SendMessage(|| {
-                        Message::MpvCommand("cycle-values".to_owned(), vec![
-                            "video-sync".to_owned(),
-                            "audio".to_owned(),
-                            "display-resample".to_owned(),
-                        ])
-                    }),
-                ),
                 (Key::ArrowLeft, Command::SendMessageShowBar(|| Message::SeekBackward)),
                 (Key::ArrowRight, Command::SendMessageShowBar(|| Message::SeekForward)),
                 (Key::ArrowDown, Command::Transition(focus, SeekBarState::Menu)),
@@ -238,33 +151,15 @@ impl Page for PlayerPage {
             duration: app.properties.duration,
 
             menu: |ui| {
-                ui.spacing_mut().button_padding = egui::vec2(20., 10.);
-                ui.spacing_mut().item_spacing = egui::vec2(30., 0.);
-
                 ui.button("foo").autofocus();
-                ui.button("bar");
-                ui.button(icons::ICON_CAMERA_ALT.rich_text().size(32.));
-                ui.button("Settings");
-                ui.button("Settings");
-                ui.button("Settings");
+                // ui.button("bar");
+                // ui.button(icons::ICON_CAMERA_ALT.rich_text().size(32.));
+            },
 
-                Panel::right("seek bar right menu")
-                    .resizable(false)
-                    .frame(Frame::NONE)
-                    .show_separator_line(false)
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().button_padding = egui::vec2(20., 10.);
-                            ui.spacing_mut().item_spacing = egui::vec2(30., 0.);
-
-                            ui.button("Settings");
-                            ui.button("Settings");
-                            ui.button("Settings");
-                            ui.button("Settings");
-                            ui.button("Settings");
-                            ui.button("Settings");
-                        });
-                    });
+            rmenu: |ui| {
+                if ui.button("Library").clicked() {
+                    Message::SetPage(Box::new(LibraryPage::default())).send();
+                }
             },
         }
         .ui(ui, self.opacity(), self.position());

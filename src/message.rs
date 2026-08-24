@@ -1,5 +1,7 @@
 use std::sync::{OnceLock, mpsc};
 
+use crate::{AppState, ui::pages::Page};
+
 pub type Receiver = mpsc::Receiver<Message>;
 
 static CHANNEL: OnceLock<(mpsc::Sender<Message>, egui::Context)> = OnceLock::new();
@@ -10,8 +12,10 @@ pub fn init(egui_ctx: egui::Context) -> mpsc::Receiver<Message> {
     rx
 }
 
-#[derive(Debug, Clone)]
 pub enum Message {
+    SetPage(Box<dyn Page>),
+    MutateState(Box<dyn FnOnce(&mut AppState) + Send>),
+
     MpvEvent(crate::mpv::event::MpvEvent),
     MpvCommand(String, Vec<String>),
 
@@ -23,11 +27,15 @@ pub enum Message {
 }
 
 impl Message {
+    pub fn mutate_state(f: impl FnOnce(&mut AppState) + Send + 'static) -> Self {
+        Message::MutateState(Box::new(f))
+    }
+
     pub fn send(self) {
         let (channel, egui_ctx) = CHANNEL.get().expect("CHANNEL wasn't initialized");
 
-        if let Err(e) = channel.send(self) {
-            log::error!("CHANNEL closed, failed to send {:?}", e.0);
+        if let Err(_) = channel.send(self) {
+            log::error!("CHANNEL closed, failed to send message");
             return;
         }
 

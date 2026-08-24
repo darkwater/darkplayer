@@ -1,19 +1,23 @@
 [package]
-name = "darkplayer"
+name    = "darkplayer"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.103"
-eframe              = { version = "0.35.0", default-features = false, features = ["glow", "x11", "wayland"] }
-egui                = "0.35.0"
+animebytes          = "0.1.0"
+anyhow              = "1.0.103"
+chrono              = { version = "0.4.45", features = ["now", "serde"] }
+eframe              = { version = "0.35.0", default-features = false, features = ["glow", "persistence", "wayland", "x11"] }
+egui                = { version = "0.35.0", features = ["persistence"] }
 egui_material_icons = { version = "0.7.0", default-features = false, features = ["outline"] }
-image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
+image               = { version = "0.25.10", default-features = false, features = ["jpeg"] }
 libmpv2             = "6.0.0"
 libmpv2-sys         = "4.0.1"
 log                 = "0.4"
 pretty_env_logger   = "0.5"
-serde = { version = "1.0.228", features = ["derive"] }
-teloxide = "0.17.0"
-tokio = { version = "1.53.0", features = ["rt-multi-thread", "macros"] }
+ranidb              = "0.2.0"
+rayon = "1.12.0"
+serde               = { version = "1.0.228", features = ["derive"] }
+teloxide            = "0.17.0"
+tokio               = { version = "1.53.0", features = ["macros", "rt-multi-thread"] }
 toml                = "1.1.3"

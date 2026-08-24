@@ -1,3 +1,4 @@
+mod db;
 mod hermes;
 mod message;
 mod mpv;
@@ -7,8 +8,10 @@ mod utils;
 use std::time::Instant;
 
 use mpv::player::MpvPlayer;
+use serde::{Deserialize, Serialize};
 
 use crate::{
+    db::Database,
     hermes::Hermes,
     message::Message,
     mpv::event::{MpvEvent, Properties},
@@ -50,10 +53,14 @@ struct Darkplayer {
     state: AppState,
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 struct AppState {
+    #[serde(skip)]
     last_seek: FadeTimer,
+    #[serde(skip)]
     properties: Properties,
+
+    db: Database,
 }
 
 impl Darkplayer {
@@ -93,11 +100,22 @@ impl Darkplayer {
         //     .unwrap();
         // player.command("set", &["interpolation", "yes"]).unwrap();
 
+        let state = cc
+            .storage
+            .and_then(|s| {
+                let start = Instant::now();
+                let res = eframe::get_value::<AppState>(s, eframe::APP_KEY);
+                log::debug!("Loaded state in {:?}", start.elapsed());
+                res
+            })
+            .unwrap_or_default();
+
         if let Some(path) = std::env::args().nth(1) {
             player.load_file(&path);
-        } else {
-            player.load_file("~/yofukashi");
         }
+
+        let existing = state.db.index.keys().cloned().collect();
+        std::thread::spawn(move || db::indexing::index("/home/dark/anime/".into(), existing));
 
         Self {
             inbox,
@@ -108,12 +126,19 @@ impl Darkplayer {
             hermes: Hermes::init(),
             frame_history: FrameHistory::default(),
             last_event: Instant::now(),
-            state: AppState::default(),
+
+            state,
         }
     }
 
     fn handle_event(&mut self, ctx: &egui::Context, msg: Message) {
         match msg {
+            Message::SetPage(page) => {
+                self.page = page;
+            }
+            Message::MutateState(f) => {
+                f(&mut self.state);
+            }
             Message::MpvEvent(MpvEvent::Shutdown) => {
                 log::info!("mpv shutdown event received, sending close to eframe");
                 self.shutting_down = true;
@@ -229,6 +254,12 @@ impl eframe::App for Darkplayer {
 
         self.render_player(ui, frame);
         self.page.render(&self.state, ui);
+    }
+
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        let start = Instant::now();
+        eframe::set_value(_storage, eframe::APP_KEY, &self.state);
+        log::debug!("Saved state in {:?}", start.elapsed());
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

@@ -11,6 +11,7 @@ pub struct SeekBar {
     pub duration: Option<f64>,
 
     pub menu: fn(&mut egui::Ui),
+    pub rmenu: fn(&mut egui::Ui),
 }
 
 const PADDING: f32 = 60.;
@@ -221,13 +222,25 @@ impl SeekBar {
             self.down_icon(ui, positions, down_opacity);
 
             if positions.show_menu(ui) {
-                let mut ui = ui.new_child(
+                let mut lui = ui.new_child(
                     UiBuilder::new()
                         .max_rect(positions.menu_rect(ui))
                         .layout(Layout::left_to_right(Align::Center).with_cross_justify(true)),
                 );
+                lui.spacing_mut().button_padding = egui::vec2(20., 10.);
+                lui.spacing_mut().item_spacing = egui::vec2(30., 0.);
 
-                (self.menu)(&mut ui);
+                (self.menu)(&mut lui);
+
+                let mut rui = ui.new_child(
+                    UiBuilder::new()
+                        .max_rect(positions.menu_rect(ui))
+                        .layout(Layout::right_to_left(Align::Center).with_cross_justify(true)),
+                );
+                rui.spacing_mut().button_padding = egui::vec2(20., 10.);
+                rui.spacing_mut().item_spacing = egui::vec2(30., 0.);
+
+                (self.rmenu)(&mut rui);
             }
         });
     }
